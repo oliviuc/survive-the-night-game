@@ -82,6 +82,7 @@ export class InputManager {
     fire: false,
     inventoryItem: 1,
     drop: false,
+    splitDrop: false,
     consume: false,
     consumeItemType: null,
     sprint: false,
@@ -326,6 +327,10 @@ export class InputManager {
         case "KeyG":
           callbacks.onDrop?.(this.inputs);
           break;
+        case "KeyX":
+          this.inputs.splitDrop = true;
+          callbacks.onDrop?.(this.inputs);
+          break;
         case "Space":
           // Trigger attack with spacebar
           e.preventDefault(); // Prevent page scrolling
@@ -446,6 +451,10 @@ export class InputManager {
         case "KeyG":
           this.inputs.drop = false;
           break;
+        case "KeyX":
+          this.inputs.splitDrop = false;
+          this.inputs.drop = false;
+          break;
         case "Space":
           // Release attack with spacebar
           this.releaseFire();
@@ -477,6 +486,7 @@ export class InputManager {
     this.inputs.interact = false;
     this.inputs.fire = false;
     this.inputs.drop = false;
+    this.inputs.splitDrop = false;
     this.inputs.consume = false;
     this.inputs.consumeItemType = null;
     this.inputs.sprint = false;
@@ -502,6 +512,7 @@ export class InputManager {
         fire: false,
         inventoryItem: this.inputs.inventoryItem,
         drop: false,
+        splitDrop: false,
         consume: false,
         consumeItemType: null,
         sprint: false,

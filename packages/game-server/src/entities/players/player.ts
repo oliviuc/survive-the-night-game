@@ -78,6 +78,7 @@ export class Player extends Entity {
         inputFire: false,
         inputInventoryItem: 1,
         inputDrop: false,
+        inputSplitDrop: false,
         inputConsume: false,
         inputConsumeItemType: null as string | null,
         inputSprint: false,
@@ -559,49 +560,92 @@ export class Player extends Entity {
 
       if (!currentItem) return;
 
-      // For other items, drop the entire stack
-      const item = inventory.removeItem(itemIndex);
+      // Handle split drop logic
+      const isSplitDrop = serialized.inputSplitDrop;
+      const currentCount = currentItem.state?.count ?? 1;
 
-      if (item) {
-        const entity = this.getEntityManager().createEntityFromItem(item);
+      let dropCount: number;
+      let shouldRemoveItem: boolean;
 
-        if (!entity) return;
-
-        const carryable = entity.getExt(Carryable);
-        carryable.setItemState({
-          count: item.state?.count || 0,
-        });
-
-        const offset = 16;
-        let dx = 0;
-        let dy = 0;
-
-        if (serialized.inputFacing === Direction.Up) {
-          dy = -offset;
-        } else if (serialized.inputFacing === Direction.Down) {
-          dy = offset;
-        } else if (serialized.inputFacing === Direction.Left) {
-          dx = -offset;
-        } else if (serialized.inputFacing === Direction.Right) {
-          dx = offset;
+      if (isSplitDrop) {
+        if (currentCount === 1) {
+          // If only 1 item, drop that 1 item
+          dropCount = 1;
+          shouldRemoveItem = true;
+        } else {
+          // Drop half the items (rounded down)
+          dropCount = Math.floor(currentCount / 2);
+          shouldRemoveItem = false;
         }
-
-        const poolManager = PoolManager.getInstance();
-        const pos = poolManager.vector2.claim(this.getPosition().x + dx, this.getPosition().y + dy);
-
-        if (entity.hasExt(Positionable)) {
-          entity.getExt(Positionable).setPosition(pos);
-        }
-
-        this.getEntityManager().addEntity(entity);
-
-        this.broadcaster.broadcastEvent(
-          new PlayerDroppedItemEvent({
-            playerId: this.getId(),
-            itemType: item.itemType,
-          })
-        );
+      } else {
+        // Normal drop: drop entire stack
+        dropCount = currentCount;
+        shouldRemoveItem = true;
       }
+
+      // Create item to drop
+      const itemToDrop: InventoryItem = {
+        itemType: currentItem.itemType,
+        state: currentItem.state
+          ? {
+              ...currentItem.state,
+              count: dropCount,
+            }
+          : dropCount > 1
+          ? { count: dropCount }
+          : undefined,
+      };
+
+      // Update inventory: either remove item or update count
+      if (shouldRemoveItem) {
+        inventory.removeItem(itemIndex);
+      } else {
+        const remainingCount = currentCount - dropCount;
+        inventory.updateItemState(itemIndex, {
+          ...(currentItem.state || {}),
+          count: remainingCount,
+        });
+      }
+
+      // Create entity for dropped item
+      const entity = this.getEntityManager().createEntityFromItem(itemToDrop);
+
+      if (!entity) return;
+
+      const carryable = entity.getExt(Carryable);
+      carryable.setItemState({
+        count: dropCount,
+      });
+
+      const offset = 16;
+      let dx = 0;
+      let dy = 0;
+
+      if (serialized.inputFacing === Direction.Up) {
+        dy = -offset;
+      } else if (serialized.inputFacing === Direction.Down) {
+        dy = offset;
+      } else if (serialized.inputFacing === Direction.Left) {
+        dx = -offset;
+      } else if (serialized.inputFacing === Direction.Right) {
+        dx = offset;
+      }
+
+      const poolManager = PoolManager.getInstance();
+      const pos = poolManager.vector2.claim(this.getPosition().x + dx, this.getPosition().y + dy);
+
+      if (entity.hasExt(Positionable)) {
+        entity.getExt(Positionable).setPosition(pos);
+      }
+
+      this.getEntityManager().addEntity(entity);
+
+      this.broadcaster.broadcastEvent(
+        new PlayerDroppedItemEvent({
+          playerId: this.getId(),
+          itemType: itemToDrop.itemType,
+        })
+      );
     }
   }
 
@@ -731,6 +775,7 @@ export class Player extends Entity {
     serialized.inputFire = input.fire ?? false;
     serialized.inputInventoryItem = input.inventoryItem ?? 1;
     serialized.inputDrop = input.drop ?? false;
+    serialized.inputSplitDrop = input.splitDrop ?? false;
     serialized.inputConsume = input.consume ?? false;
     serialized.inputConsumeItemType = input.consumeItemType ?? null;
     serialized.inputSprint = input.sprint ?? false;

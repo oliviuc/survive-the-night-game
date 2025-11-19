@@ -9,6 +9,7 @@ export type Input = {
   fire: boolean;
   inventoryItem: number;
   drop: boolean;
+  splitDrop: boolean;
   consume: boolean;
   consumeItemType: ItemType | null;
   sprint: boolean;

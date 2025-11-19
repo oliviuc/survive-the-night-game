@@ -43,6 +43,7 @@ export class PlayerInputEvent implements GameEvent<PlayerInputEventData> {
     if (input.sprint) bitset |= 1 << 4;
     if (hasAimAngle) bitset |= 1 << 5;
     if (hasConsumeItemType) bitset |= 1 << 6;
+    if (input.splitDrop) bitset |= 1 << 7;
     writer.writeUInt8(bitset);
 
     // facing: uint8 (Direction enum)
@@ -84,6 +85,7 @@ export class PlayerInputEvent implements GameEvent<PlayerInputEventData> {
     const sprint = (bitset & (1 << 4)) !== 0;
     const hasAimAngle = (bitset & (1 << 5)) !== 0;
     const hasConsumeItemType = (bitset & (1 << 6)) !== 0;
+    const splitDrop = (bitset & (1 << 7)) !== 0;
 
     // facing: uint8
     const facing = reader.readUInt8() as Direction;
@@ -120,6 +122,7 @@ export class PlayerInputEvent implements GameEvent<PlayerInputEventData> {
       fire,
       inventoryItem,
       drop,
+      splitDrop,
       consume,
       consumeItemType,
       sprint,
