@@ -659,11 +659,6 @@ export class Player extends Entity {
 
         // Find a nearby entity with the same item type that is stackable
         for (const nearbyEntity of nearbyEntities) {
-          // Skip the entity we just created
-          if (nearbyEntity.getId() === entity.getId()) {
-            continue;
-          }
-
           // Check if entity has Carryable extension
           if (!nearbyEntity.hasExt(Carryable)) {
             continue;
