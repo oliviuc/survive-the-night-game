@@ -42,6 +42,7 @@ export class Player extends Entity {
   private static readonly INTERACT_COOLDOWN = 0.25;
   private static readonly CONSUME_COOLDOWN = 0.5;
   private static readonly PICKUP_HOLD_DURATION = 0.5; // 1 second in seconds
+  private static readonly DROP_COMBINE_RADIUS = 20;
 
   // Internal state
   private fireCooldown = new Cooldown(0.4, true);
@@ -638,8 +639,88 @@ export class Player extends Entity {
         entity.getExt(Positionable).setPosition(pos);
       }
 
+      // Check if item is stackable (ammo, consumable, throwable are stackable)
+      const itemConfig = itemRegistry.get(itemToDrop.itemType);
+      const isStackable =
+        itemConfig?.category === "ammo" ||
+        itemConfig?.category === "consumable" ||
+        itemConfig?.category === "throwable";
+
+      // Add entity to manager first so it's in the spatial grid
       this.getEntityManager().addEntity(entity);
 
+      // Try to combine with nearby stackable items of the same type
+      if (isStackable) {
+        const centerPos = entity.getExt(Positionable).getCenterPosition();
+        const nearbyEntities = this.getEntityManager().getNearbyEntities(
+          centerPos,
+          Player.DROP_COMBINE_RADIUS
+        );
+
+        // Find a nearby entity with the same item type that is stackable
+        for (const nearbyEntity of nearbyEntities) {
+          // Skip the entity we just created
+          if (nearbyEntity.getId() === entity.getId()) {
+            continue;
+          }
+
+          // Check if entity has Carryable extension
+          if (!nearbyEntity.hasExt(Carryable)) {
+            continue;
+          }
+
+          const nearbyCarryable = nearbyEntity.getExt(Carryable);
+          const nearbyItemType = nearbyCarryable.getItemType();
+
+          // Check if same item type
+          if (nearbyItemType !== itemToDrop.itemType) {
+            continue;
+          }
+
+          // Check if nearby item is stackable (has count property and it's a valid number)
+          const nearbyState = nearbyCarryable.getItemState();
+          const nearbyCount = nearbyState?.count;
+
+          if (nearbyCount === undefined || typeof nearbyCount !== "number" || nearbyCount <= 0) {
+            // Not stackable or invalid count, skip
+            continue;
+          }
+
+          // Verify distance is within radius
+          if (nearbyEntity.hasExt(Positionable)) {
+            const nearbyPos = nearbyEntity.getExt(Positionable).getCenterPosition();
+            const actualDistance = distance(centerPos, nearbyPos);
+            if (actualDistance > Player.DROP_COMBINE_RADIUS) {
+              continue;
+            }
+          }
+
+          // Found a stackable item of the same type - combine them
+          const combinedCount = nearbyCount + dropCount;
+          nearbyCarryable.setItemState({
+            ...nearbyState,
+            count: combinedCount,
+          });
+
+          // Mark the Carryable extension as dirty so the change is synced to clients
+          nearbyCarryable.markDirty();
+
+          // Remove the newly created entity since we combined it
+          this.getEntityManager().markEntityForRemoval(entity);
+
+          // Broadcast event
+          this.broadcaster.broadcastEvent(
+            new PlayerDroppedItemEvent({
+              playerId: this.getId(),
+              itemType: itemToDrop.itemType,
+            })
+          );
+
+          return; // Exit early since we combined the item
+        }
+      }
+
+      // No nearby item to combine with, broadcast event normally
       this.broadcaster.broadcastEvent(
         new PlayerDroppedItemEvent({
           playerId: this.getId(),
